@@ -15,8 +15,18 @@ pub fn create(exe_name: []const u8) Command {
         &.{ gen_mod.exe_dir, exe_name },
     ) catch @panic("OOM");
 
+    if (!std.fs.access(exe_path, .{})) {
+        std.debug.panic(
+            "Executable '{s}' not found in '{s}'. Please ensure it's built and available.",
+            .{ exe_name, gen_mod.exe_dir },
+        );
+    }
+
     return Command{
+        .allocator = testing.allocator,
         .exe_path = exe_path,
+        .args = std.ArrayList([]const u8).init(testing.allocator),
+        .stdin_data = null,
     };
 }
 
