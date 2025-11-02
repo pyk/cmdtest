@@ -6,4 +6,5 @@
 zig-out
 
 # copilot
-copilot-*.md
+spec-*.md
+context-*.md
