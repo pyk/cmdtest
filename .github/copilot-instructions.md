@@ -1,7 +1,8 @@
 # Project Description
 
 - `exetest` is a Zig library to test CLI apps.
-- The target audience is Zig developer
+- `exetest` is focus on ergonomics, performance and modularity.
+- The target audience is Zig developer, esp CLI builder.
 
 ---
 
