@@ -15,9 +15,65 @@
 
 ---
 
-# Toolchain
+# Design
 
-- Zig v0.15.2
+`exetest` is designed to be very simple, it only expose 2 functions:
+
+1. `add`: This function is used in the user's `build.zig`. This is used to
+   register test file and test runner.
+2. `run`: This function is used in the user's tests. It allows user to test any
+   binary installed on their system, including all installed executables in
+   their `build.zig` script.
+
+Expected user's flow:
+
+1. User install `exetest` via:
+
+   ```shell
+   zig fetch --save=exetest https://github.com/pyk/exetest/archive/${VERSION}.tar.gz
+   ```
+
+   This will automatically update their `build.zig.zon` file.
+
+2. User add `exetest` into their dependency:
+
+   ```zig
+    const exetest = @import("exetest");
+
+    pub fn build(b: *std.Build) !void {
+      // Add dependency
+      const exetest_dep = b.dependency("exetest", .{
+          .target = target,
+      });
+      const exetest_mod = exetest_dep.module("exetest");
+
+      // Add test
+      const run_test = exetest.add(b, .{
+          .name = "integration",
+          .test_file = b.path("src/test.zig"),
+          .exetest_mod = exetest_mod,
+      });
+
+      const test_step = b.step("test", "Run tests");
+      test_step.dependOn(&run_test.step);
+    }
+   ```
+
+3. User write their test file. For example: `src/test.zig`:
+
+   ```zig
+    const exetest = @import("exetest");
+    const testing = @import("std").testing;
+    const std = @import("std");
+
+    test "ls" {
+        var result = exetest.run("ls", .{});
+        defer result.deinit();
+        try testing.expectEqual(@as(u8, 0), result.code);
+    }
+   ```
+
+4. User run their test: `zig build test`.
 
 ---
 
@@ -29,8 +85,8 @@ tools against this path.
 
 - `zig build test --summary all` to run the test.
 - `zig build` to run build.
-- Always runs `zig build test --summary all` after edit.
-- Fix any error.
+- Consider running `zig build test --summary all` after edits to validate
+  changes.
 
 When implementing features involving the standard library:
 
@@ -42,15 +98,6 @@ When implementing features involving the standard library:
     knowledge.
 4.  **Cite (if relevant)**: Mention relevant files (e.g., "Based on
     `lib/std/crypto/hash.zig`...").
-
----
-
-# Zig Standard Library
-
-- The Zig standard library documentation can be found in
-  `.mise/installs/zig/0.15.2/lib/std`
-
----
 
 # Zig Naming & Style Conventions
 
