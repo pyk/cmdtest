@@ -12,7 +12,9 @@ test "run: empty args" {
 test "run: args forwarded" {
     // When an arg string is provided, it should be forwarded as a single argv element
     // to the child process. The `test_exe` prints each arg as "ARG: {s}\n".
-    var result = exetest.run("exetest", .{ .args = "--greet" });
+    var result = exetest.run("exetest", .{
+        .args = &[_][]const u8{"--greet"},
+    });
     defer result.deinit();
 
     // Convert stdout bytes to a slice to check the printed arg line.
