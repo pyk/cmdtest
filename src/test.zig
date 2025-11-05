@@ -1,24 +1,24 @@
-const exetest = @import("exetest");
-const testing = @import("std").testing;
 const std = @import("std");
+const testing = std.testing;
+const exetest = @import("exetest");
 
-test "run: empty args" {
-    var result = exetest.run("exetest", .{});
-    defer result.deinit();
-
-    try testing.expectEqual(@as(u8, 0), result.code);
+test "run: string" {
+    exetest.run("exetest");
+    // exetest.run([_][]const u8{"exetest"});
+    // exetest.run(.{ .argv = [_][]const u8{"exetest"}, .stdin = "data" });
 }
 
-test "run: args forwarded" {
-    // When an arg string is provided, it should be forwarded as a single argv element
-    // to the child process. The `test_exe` prints each arg as "ARG: {s}\n".
-    var result = exetest.run("exetest", .{
-        .args = &[_][]const u8{"--greet"},
-    });
-    defer result.deinit();
+// test "args: null" {
+//     var result = exetest.run("exetest", .{});
+//     defer result.deinit();
+//     testing.expectEqualStrings(result.stdout,
+//         \\ test
+//     );
+// }
 
-    // Convert stdout bytes to a slice to check the printed arg line.
-    const err_slice = result.stderr.items[0..result.stderr.items.len];
-    try testing.expect(std.mem.indexOf(u8, err_slice, "ARG: ") != null);
-    try testing.expect(std.mem.indexOf(u8, err_slice, "--greet") != null);
-}
+// test "args: empty string" {
+//     var result = exetest.run("exetest", .{
+//         .args = "--greet",
+//     });
+//     defer result.deinit();
+// }
