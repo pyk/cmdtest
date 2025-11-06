@@ -156,7 +156,10 @@ pub fn run(options: RunOptions) !RunResult {
 
     // Prepare buffers to collect stdout and stderr
     var stdout_buffer: std.ArrayList(u8) = .empty;
+    defer stdout_buffer.deinit(options.allocator);
+
     var stderr_buffer: std.ArrayList(u8) = .empty;
+    defer stderr_buffer.deinit(options.allocator);
 
     try child.collectOutput(
         options.allocator,
