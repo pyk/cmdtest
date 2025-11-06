@@ -9,8 +9,7 @@
 # Structure
 
 - `build.zig`: Build script.
-- `src/root.zig`: Main module, expose `add`, `run`, `cmd` and `argv` functions.
-  All unit tests for the `cmd` and `argv` is in this file.
+- `src/root.zig`: Main module, expose `add` and `run` functions.
 - `src/test_exe.zig`: Source code of binary to test the `run` function.
 - `src/test.zig`: Integration tests, mainly used to test `run` function.
 
@@ -18,21 +17,13 @@
 
 # Design
 
-`exetest` is designed to be very simple, it only expose 2 core functions and 2
-helper functions:
-
-Core functions:
+`exetest` is designed to be very simple, it only expose 2 core functions:
 
 1. `add`: This function is used in the user's `build.zig`. This is used to
    register test file and test runner.
 2. `run`: This function is used in the user's tests. It allows user to test any
    binary installed on their system, including all installed executables in
    their `build.zig` script.
-
-Helper functions:
-
-1. `argv`: This function used to convert tuple literal to `[]const []const u8`.
-2. `cmd`: This function used to convert string literal to `[]const []const u8`.
 
 Expected user's flow:
 
@@ -69,7 +60,7 @@ Expected user's flow:
     const exetest = @import("exetest");
 
     test "ls" {
-        const argv = exetest.cmd("ls --help");
+        const argv = &[_][]const u8 {"echo", "hello"};
         var result = exetest.run(.{ .argv = argv });
         defer result.deinit();
         try testing.expectEqual(@as(u8, 0), result.code);
