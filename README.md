@@ -90,10 +90,10 @@ const testing = std.testing;
 test "cat" {
   const argv = &[_][]const u8{"cat"};
   const input = "a\nb\n";
-  var r = try exetest.run(.{ .argv = argv, .stdin = input });
-  defer r.deinit();
+  var result = try exetest.run(.{ .argv = argv, .stdin = input });
+  defer result.deinit();
 
-  try testing.expectEqualStrings(input, r.stdout);
+  try testing.expectEqualStrings(input, result.stdout);
 }
 ```
 
@@ -101,12 +101,12 @@ Limit how many stdin bytes are sent:
 
 ```zig
 const payload = large_slice; // some []const u8
-var res = try exetest.run(.{
+var result = try exetest.run(.{
   .argv = argv,
   .stdin = payload,
   .max_stdin_bytes = 1024, // truncate to 1 KiB
 });
-defer res.deinit();
+defer result.deinit();
 ```
 
 And you can do much more:
