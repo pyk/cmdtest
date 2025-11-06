@@ -1,12 +1,13 @@
 .{
     .name = .exetest,
     .version = "0.0.1",
+    .fingerprint = 0xb7a6abd59d7fa03,
     .minimum_zig_version = "0.15.2",
     .paths = .{
         "build.zig",
         "build.zig.zon",
         "src",
+        "LICENSE",
         "README.md",
     },
-    .fingerprint = 0xb7a6abd59d7fa03,
 }
