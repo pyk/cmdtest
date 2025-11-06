@@ -3,21 +3,16 @@ const Build = std.Build;
 const testing = std.testing;
 const Child = std.process.Child;
 
-/// Options for `add` used by user's `build.zig`.
 pub const AddOptions = struct {
-    /// name of the test target
+    /// Name of the test target
     name: []const u8,
-    /// path to the test source file
+    /// Path to the test source file
     test_file: Build.LazyPath,
-    /// the `exetest` build module to import into the test.
+    /// The `exetest` build module to import into the test
     exetest_mod: *Build.Module,
 };
 
-/// Register an integration test runnable with the build.
-///
-/// This creates a test module that imports the `exetest` runtime and
-/// produces a `run` step that executes the compiled test binary. It also
-/// ensures all build-installed executables are available via `PATH`.
+/// Register new test
 pub fn add(b: *Build, options: AddOptions) *Build.Step.Run {
     // Create the test module that imports the runtime module
     const test_mod = b.createModule(.{
@@ -53,68 +48,84 @@ pub fn add(b: *Build, options: AddOptions) *Build.Step.Run {
     return run_test_exe;
 }
 
-/// Options for `run` controlling I/O, allocator and output limits.
+/// Options for `run` controlling I/O, allocator, and output limits.
 pub const RunOptions = struct {
-    /// Argument vector passed to the child process. The first element
-    /// should be the program name / path as conventionally provided to
-    /// exec-style APIs.
+    /// Argument vector passed to the child process.
+    /// The first element is the executable name or path.
+    ///
+    /// For examples:
+    ///
+    /// [_][]const u8 {"echo", "hello"}
+    /// [_][]const u8 {"/bin/echo", "hello"}
+    /// [_][]const u8 {"./zig-out/bin/echo", "hello"}
+    ///
     argv: []const []const u8,
 
     /// Allocator used for any allocations performed by `run` and for
-    /// capturing stdout/stderr. Defaults to `std.testing.allocator` so
-    /// tests use the test allocator by default.
+    /// capturing stdout/stderr. Defaults to `std.testing.allocator`, which
+    /// enables leak detection and is good for tests to ensure proper
+    /// memory management.
     allocator: std.mem.Allocator = testing.allocator,
 
     /// Optional bytes to write into the child's stdin. When provided the
     /// child's stdin will be a pipe and the bytes will be written then the
-    /// write-end closed to signal EOF. If null the child's stdin inherits
-    /// from the parent (or is ignored depending on other options).
+    /// write-end closed to signal EOF. If null the child's stdin is ignored.
     stdin: ?[]const u8 = null,
 
-    /// Maximum number of bytes to write into the child's stdin. If the
-    /// provided `stdin` slice is larger, it will be truncated to this size.
+    /// Maximum number of bytes to write into the child's stdin.
+    /// Defaults to 64 KiB to avoid excessive memory usage for typical CLI test cases.
+    /// If the provided `stdin` slice is larger, it will be truncated to this size.
     max_stdin_bytes: usize = 64 * 1024,
 
     /// Maximum number of bytes to capture from stdout/stderr. Output beyond
     /// this limit will be discarded.
-    max_output_bytes: usize = 50 * 1024,
+    max_output_bytes: usize = 64 * 1024,
 
-    /// Optional working directory for the child process. When non-null the
-    /// child will be started with this path as its current working
-    /// directory.
+    /// Optional working directory for the child process.
+    /// When non-null the child will be started with this path as its current working directory.
+    /// When null, the child inherits the parent's working directory.
     cwd: ?[]const u8 = null,
 
     /// Optional environment map to use for the child process. If provided
     /// the child will use this `EnvMap` instead of inheriting the parent's
-    /// environment. The caller retains ownership of the `EnvMap` and must
-    /// ensure it remains valid for the duration of the child execution.
+    /// environment. The caller must ensure the provided `EnvMap` remains valid
+    /// and unmodified for the entire duration of the child process execution.
     env_map: ?*const std.process.EnvMap = null,
 };
 
 /// Result returned by `run` with exit info and captured output.
 pub const RunResult = struct {
-    /// Exit code (0 on success, otherwise process-specific value).
+    /// Exit code returned by the child process.
+    /// If the process exited normally, this is the exit code.
+    /// If terminated by signal or other reason, this is 0.
     code: u8,
-    /// Termination reason returned by `Child.wait()`.
+
+    /// Process termination reason, such as exit or signal, from `Child.wait()`.
     term: Child.Term,
-    /// Captured stdout bytes.
+
+    /// Captured stdout slice. If the child's output exceeds `max_output_bytes`, this will be truncated.
     stdout: []const u8,
-    /// Captured stderr bytes.
+
+    /// Captured stderr bytes. If the child's output exceeds `max_output_bytes`, this will be truncated.
     stderr: []const u8,
+
     /// Allocator used for the captured buffers.
     allocator: std.mem.Allocator,
 
+    /// Frees the captured output buffers.
+    /// Must be called to avoid memory leaks after using `RunResult`.
     pub fn deinit(self: *RunResult) void {
         self.allocator.free(self.stdout);
         self.allocator.free(self.stderr);
     }
 };
 
-/// Spawn and run an executable with the given `RunOptions`.
+/// Run an executable synchronously and capture its output.
 ///
-/// This is a synchronous helper that spawns the child, collects stdout and
-/// stderr up to `max_output_bytes`, waits for termination and returns a
-/// `RunResult` with captured output and termination info.
+/// Spawns the child process, collects stdout and stderr up to `max_output_bytes`,
+/// waits for termination, and returns a `RunResult` with captured output and termination info.
+/// Returns an error on spawn, I/O, or wait failure.
+/// The caller must call `RunResult.deinit` to free captured output buffers.
 pub fn run(options: RunOptions) !RunResult {
     // Create child process
     var child = Child.init(options.argv, options.allocator);
@@ -167,12 +178,19 @@ pub fn run(options: RunOptions) !RunResult {
         &stderr_buffer,
         options.max_output_bytes,
     );
-
-    // Wait for child termination and include the termination reason in the panic message.
     const term = try child.wait();
 
+    // Set exit code based on termination reason.
+    // If exited normally, use exit code. If killed by signal or other, set to 0.
+    const code = switch (term) {
+        .Exited => |exit_code| exit_code,
+        .Signal => 0,
+        .Stopped => 0,
+        .Unknown => 0,
+    };
+
     return RunResult{
-        .code = if (term == .Exited) term.Exited else 0,
+        .code = code,
         .term = term,
         .stdout = try stdout_buffer.toOwnedSlice(options.allocator),
         .stderr = try stderr_buffer.toOwnedSlice(options.allocator),
