@@ -1,6 +1,7 @@
 const std = @import("std");
 const fs = std.fs;
 const mem = std.mem;
+const exetest = @import("./src/root.zig");
 
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
@@ -33,9 +34,6 @@ pub fn build(b: *std.Build) !void {
         }),
     });
     b.installArtifact(test_exe);
-
-    // NOTE: End user will use b.addDependency
-    const exetest = @import("src/root.zig");
 
     const run_integration_tests = exetest.add(b, .{
         .name = "integration",
