@@ -111,6 +111,7 @@ defer result.deinit();
 
 And you can do much more:
 
+- Automatically discover built artifacts.
 - Capture `stderr` output.
 - Limit how much output is captured.
 - Run with a custom working directory.
