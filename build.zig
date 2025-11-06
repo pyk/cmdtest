@@ -9,7 +9,7 @@ pub const AddOptions = struct {
     /// Path to the test source file
     test_file: Build.LazyPath,
     /// The `exetest` build module to import into the test
-    exetest_mod: ?*Build.Module,
+    exetest_mod: ?*Build.Module = null,
 };
 
 /// Register new test
