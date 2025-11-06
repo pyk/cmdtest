@@ -2,11 +2,22 @@ const std = @import("std");
 
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
+    var it = try std.process.argsWithAllocator(allocator);
+    defer it.deinit();
+
+    var args_list = std.array_list.Managed([]const u8).init(allocator);
+    defer args_list.deinit();
+    while (it.next()) |arg| {
+        try args_list.append(arg);
+    }
+    const args = args_list.items;
 
     if (args.len <= 1) {
-        std.debug.print("OK\n", .{});
+        var buffer: [64]u8 = undefined;
+        var stdout_writer = std.fs.File.stdout().writer(&buffer);
+        const stdout = &stdout_writer.interface;
+        try stdout.writeAll("OK\n");
+        try stdout.flush();
         return;
     }
 
@@ -21,45 +32,56 @@ pub fn main() !void {
 
     var i: usize = 1;
     var exit_code: u8 = 0;
+    // obtain stdout/stderr writers with stack buffers (matches stdlib usage)
+    var stdout_stack: [1024]u8 = undefined;
+    var stderr_stack: [1024]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_stack);
+    var stderr_writer = std.fs.File.stderr().writer(&stderr_stack);
+    const stdout = &stdout_writer.interface;
+    const stderr = &stderr_writer.interface;
+
     while (i < args.len) : (i += 1) {
         const s = args[i];
         if (std.mem.eql(u8, s, "--print-argv")) {
-            var j: usize = 1;
+            var j: usize = i + 1;
             while (j < args.len) : (j += 1) {
                 const a = args[j];
-                std.debug.print("{s}\n", .{a});
+                try stdout.writeAll(a);
+                try stdout.writeAll("\n");
             }
             break;
         } else if (std.mem.eql(u8, s, "--print-argv-stderr")) {
-            var j: usize = 1;
+            var j: usize = i + 1;
             while (j < args.len) : (j += 1) {
                 const a = args[j];
-                std.debug.print("ERR: {s}\n", .{a});
+                try stderr.writeAll("ERR: ");
+                try stderr.writeAll(a);
+                try stderr.writeAll("\n");
             }
             break;
         } else if (std.mem.eql(u8, s, "--echo-arg")) {
             // echo provided argument (avoid stdin API differences across std versions)
             if (i + 1 >= args.len) {
-                std.debug.print("missing echo argument\n", .{});
+                try stderr.writeAll("missing echo argument\n");
                 std.process.exit(2);
             }
             const data = args[i + 1];
-            std.debug.print("{s}", .{data});
+            try stdout.writeAll(data);
             break;
         } else if (std.mem.eql(u8, s, "--exit")) {
             if (i + 1 >= args.len) {
-                std.debug.print("missing exit code\n", .{});
+                try stderr.writeAll("missing exit code\n");
                 std.process.exit(2);
             }
             const parsed = std.fmt.parseInt(u8, args[i + 1], 10) catch {
-                std.debug.print("invalid exit code\n", .{});
+                try stderr.writeAll("invalid exit code\n");
                 std.process.exit(2);
             };
             exit_code = parsed;
             break;
         } else if (std.mem.eql(u8, s, "--spam")) {
             if (i + 2 >= args.len) {
-                std.debug.print("spam missing args\n", .{});
+                try stderr.writeAll("spam missing args\n");
                 std.process.exit(2);
             }
             const total = std.fmt.parseInt(usize, args[i + 1], 10) catch {
@@ -75,15 +97,20 @@ pub fn main() !void {
             for (out_buf) |*b| b.* = 'A';
             while (remaining > 0) {
                 const to_write = if (remaining < chunk) remaining else chunk;
-                std.debug.print("{s}", .{out_buf[0..to_write]});
+                try stdout.writeAll(out_buf[0..to_write]);
                 remaining -= to_write;
             }
             break;
         } else {
-            std.debug.print("unknown flag: {s}\n", .{s});
+            try stderr.writeAll("unknown flag: ");
+            try stderr.writeAll(s);
+            try stderr.writeAll("\n");
             std.process.exit(2);
         }
     }
 
+    // flush writers to ensure output is written
+    try stdout.flush();
+    try stderr.flush();
     std.process.exit(exit_code);
 }
