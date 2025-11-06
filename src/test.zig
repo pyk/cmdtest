@@ -93,3 +93,41 @@ test "run: stdin truncation" {
     try testing.expect(result.term == .Exited);
     try testing.expectEqualStrings("", result.stderr);
 }
+
+test "run: non-zero exit code" {
+    const argv = &[_][]const u8{ "exetest", "--exit", "42" };
+    var result = try exetest.run(.{ .argv = argv });
+    defer result.deinit();
+
+    try testing.expectEqual(@as(u8, 42), result.code);
+    try testing.expect(result.term == .Exited);
+}
+
+test "run: terminated by signal" {
+    const argv = &[_][]const u8{ "exetest", "--abort" };
+    var result = try exetest.run(.{ .argv = argv });
+    defer result.deinit();
+
+    // Term should indicate a signal (not Exited)
+    try testing.expect(result.term != .Exited);
+}
+
+test "run: executable not found" {
+    const missing = "exetest-missing-please-12345";
+    const argv = &[_][]const u8{missing};
+
+    // We expect an error when attempting to run a non-existent executable.
+    const run_err = exetest.run(.{ .argv = argv });
+    if (run_err) |r| {
+        // Unexpected success: deinit and fail
+        var tmp = r;
+        defer tmp.deinit();
+        try testing.expect(false);
+    } else |err| {
+        // Got an error as expected. Nothing more to assert (error kinds vary by platform).
+        // Print the error (to reference it) and consider this test successful
+        // because an error was expected.
+        std.debug.print("spawn error: {any}\n", .{err});
+        try testing.expect(true);
+    }
+}

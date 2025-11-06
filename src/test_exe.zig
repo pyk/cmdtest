@@ -12,15 +12,37 @@ pub fn main() !void {
     }
     const args = args_list.items;
 
-    // detect --stderr and collect positional args (excluding program name)
+    // detect --stderr, --exit N, --abort and collect positional args (excluding program name)
     var pos_list = std.array_list.Managed([]const u8).init(allocator);
     defer pos_list.deinit();
     var use_stderr = false;
     var i: usize = 1;
+    var exit_requested: ?u8 = null;
+    var abort_requested = false;
     while (i < args.len) : (i += 1) {
         const s = args[i];
         if (std.mem.eql(u8, s, "--stderr")) {
             use_stderr = true;
+            continue;
+        }
+        if (std.mem.eql(u8, s, "--abort")) {
+            abort_requested = true;
+            continue;
+        }
+        if (std.mem.eql(u8, s, "--exit")) {
+            // next argument must be the exit code
+            if (i + 1 >= args.len) {
+                std.debug.print("missing exit code\n", .{});
+                std.process.exit(1);
+            }
+            const code_s = args[i + 1];
+            // parse as unsigned 8-bit integer
+            const parsed = std.fmt.parseInt(u8, code_s, 10) catch {
+                std.debug.print("invalid exit code: {s}\n", .{code_s});
+                std.process.exit(1);
+            };
+            exit_requested = parsed;
+            i += 1; // skip the numeric argument
             continue;
         }
         try pos_list.append(s);
@@ -43,4 +65,14 @@ pub fn main() !void {
     }
 
     try io.flush();
+
+    // Handle special termination flags after producing output.
+    if (abort_requested) {
+        // abort will terminate the process with SIGABRT on POSIX.
+        std.process.abort();
+    }
+
+    if (exit_requested) |code| {
+        std.process.exit(code);
+    }
 }
