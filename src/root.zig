@@ -141,18 +141,14 @@ pub fn run(options: RunOptions) !RunResult {
             else
                 options.max_stdin_bytes;
 
-            // Use a small stack buffer for the File.writer
             var buf: [1024]u8 = undefined;
             var writer = stdin_file.writer(&buf);
             const io = &writer.interface;
 
-            // writeAll may return errors from low-level I/O; only write up to write_len
             try io.writeAll(stdin_bytes[0..write_len]);
-            // flush to ensure data is sent
             try io.flush();
-
-            // Close the writing end to signal EOF to the child
             stdin_file.close();
+
             // Mark as closed to avoid double-close in Child.cleanupStreams
             child.stdin = null;
         }
