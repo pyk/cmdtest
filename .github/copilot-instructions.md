@@ -1,7 +1,7 @@
 # Project Description
 
-- `exetest` is a Zig library to test CLI apps.
-- `exetest` is focus on ergonomics, performance and modularity.
+- `cmdtest` is a Zig library to test CLI apps.
+- `cmdtest` is focus on ergonomics, performance and modularity.
 - The target audience is Zig developer, esp CLI builder.
 
 ---
@@ -17,7 +17,7 @@
 
 # Design
 
-`exetest` is designed to be very simple, it only expose 2 core functions:
+`cmdtest` is designed to be very simple, it only expose 2 core functions:
 
 1. `add`: This function is used in the user's `build.zig`. This is used to
    register test file and test runner.
@@ -27,22 +27,22 @@
 
 Expected user's flow:
 
-1. User install `exetest` via:
+1. User install `cmdtest` via:
 
    ```shell
-   zig fetch --save=exetest https://github.com/pyk/exetest/archive/${VERSION}.tar.gz
+   zig fetch --save=cmdtest https://github.com/pyk/cmdtest/archive/${VERSION}.tar.gz
    ```
 
    This will automatically update their `build.zig.zon` file.
 
-2. User add `exetest` into their dependency:
+2. User add `cmdtest` into their dependency:
 
    ```zig
-    const exetest = @import("exetest");
+    const cmdtest = @import("cmdtest");
 
     pub fn build(b: *std.Build) !void {
       // Add test
-      const run_test = exetest.add(b, .{
+      const run_test = cmdtest.add(b, .{
           .name = "integration",
           .test_file = b.path("src/test.zig"),
       });
@@ -57,11 +57,11 @@ Expected user's flow:
    ```zig
     const std = @import("std");
     const testing = std.testing;
-    const exetest = @import("exetest");
+    const cmdtest = @import("cmdtest");
 
     test "ls" {
         const argv = &[_][]const u8 {"echo", "hello"};
-        var result = exetest.run(.{ .argv = argv });
+        var result = cmdtest.run(.{ .argv = argv });
         defer result.deinit();
         try testing.expectEqual(@as(u8, 0), result.code);
     }
