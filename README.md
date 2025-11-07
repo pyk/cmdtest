@@ -7,7 +7,7 @@ CLI testing for Zig.
 1. Fetch the latest release:
 
    ```shell
-   zig fetch --save=cmdtest https://github.com/pyk/cmdtest/archive/v0.1.0.tar.gz
+   zig fetch --save=cmdtest https://github.com/pyk/cmdtest/archive/v0.2.0.tar.gz
    ```
 
    This updates `build.zig.zon`.
