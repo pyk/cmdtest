@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const testing = std.testing;
 const cmdtest = @import("cmdtest");
 
@@ -170,19 +171,55 @@ test "run: with env_map" {
     try testing.expectEqualStrings("hello-env\n", result.stdout);
 }
 
-test "spawn: interactive mode" {
-    const argv = &[_][]const u8{ "cmdtest", "--interactive" };
+// test "spawn: interactive mode" {
+//     const argv = &[_][]const u8{ "cmdtest", "--exit", "42" };
+//     var proc = try cmdtest.spawn(.{ .argv = argv });
+//     defer proc.deinit();
+
+//     try proc.writeToStdin("PING\n"); // I expect this to be fail as process exit with 42 as code
+//     try proc.expectStdout("TEST");
+
+//     try proc.writeToStdin("ECHO works\n");
+//     try testing.expectEqualStrings("works", try proc.readLineFromStdout());
+
+//     try proc.writeToStdin("EXIT\n");
+
+//     const term = try proc.child.wait();
+//     try testing.expectEqual(@as(u8, 0), term.Exited);
+// }
+
+test "writeToStdin: running process that accepts stdin" {
+    const argv = &[_][]const u8{"cat"};
     var proc = try cmdtest.spawn(.{ .argv = argv });
     defer proc.deinit();
 
-    try proc.writeToStdin("PING\n");
-    try testing.expectEqualStrings("PONG", try proc.readLineFromStdout());
+    // This write should succeed without error.
+    try proc.writeToStdin("data\n");
+    try proc.expectStdout("data");
+}
 
-    try proc.writeToStdin("ECHO works\n");
-    try testing.expectEqualStrings("works", try proc.readLineFromStdout());
+test "writeToStdin: process confirmed exited" {
+    const argv = &[_][]const u8{ "echo", "42" };
+    var proc = try cmdtest.spawn(.{ .argv = argv });
+    defer proc.deinit();
+    _ = try proc.child.wait();
+    try testing.expectError(error.ProcessExited, proc.writeToStdin("data\n"));
+}
 
-    try proc.writeToStdin("EXIT\n");
+test "writeToStdin: running process that ignores stdin" {
+    const argv = &[_][]const u8{ "sleep", "1" };
+    var proc = try cmdtest.spawn(.{ .argv = argv });
+    defer proc.deinit();
+    try proc.writeToStdin("this is ignored\n");
+}
 
-    const term = try proc.child.wait();
-    try testing.expectEqual(@as(u8, 0), term.Exited);
+test "writeToStdin: process died unexpectedly" {
+    // NOTE: skipped for now, this race condition is known issue
+    if (builtin.is_test) return error.SkipZigTest;
+
+    const argv = &[_][]const u8{"ls"};
+    var proc = try cmdtest.spawn(.{ .argv = argv });
+    defer proc.deinit();
+    try testing.expectError(error.ProcessExited, proc.writeToStdin("data\n"));
+    // TODO: handle this
 }

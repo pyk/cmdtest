@@ -1,4 +1,5 @@
 const std = @import("std");
+const fs = std.fs;
 const testing = std.testing;
 const Child = std.process.Child;
 const Writer = std.Io.Writer;
@@ -165,14 +166,17 @@ pub const SpawnOptions = struct {
 
 /// Manages a long-running, interactive child process for testing.
 pub const InteractiveProcess = struct {
+    const Self = @This();
+
     child: Child,
+    pid: Child.Id,
     stdout_buffer: [1024]u8 = undefined,
     stdin_buffer: [1024]u8 = undefined,
     stderr_buffer: [1024]u8 = undefined,
 
     /// Cleans up resources and ensures the child process is terminated.
     /// This should always be called, typically with `defer`.
-    pub fn deinit(self: *InteractiveProcess) void {
+    pub fn deinit(self: *Self) void {
         if (self.child.stdin) |stdin_file| {
             stdin_file.close();
             self.child.stdin = null;
@@ -180,18 +184,25 @@ pub const InteractiveProcess = struct {
         _ = self.child.wait() catch {};
     }
 
+    pub const WriteStdinError = error{
+        // This means process already exited
+        ProcessExited,
+        // This means something wrong when writing to stdin
+        WriteFailed,
+    };
+
     /// Writes bytes to the child process's stdin.
-    pub fn writeToStdin(self: *InteractiveProcess, bytes: []const u8) !void {
-        const stdin_file = self.child.stdin orelse return error.MissingStdin;
+    pub fn writeToStdin(self: *Self, bytes: []const u8) WriteStdinError!void {
+        const stdin_file = self.child.stdin orelse return error.ProcessExited;
         var stdin_writer = stdin_file.writer(&self.stdin_buffer);
         var stdin = &stdin_writer.interface;
-        try stdin.writeAll(bytes);
-        try stdin.flush();
+        stdin.writeAll(bytes) catch return error.WriteFailed;
+        stdin.flush() catch return error.WriteFailed;
     }
 
     /// Reads from the child's stdout until a newline is found or the buffer is full.
     /// The returned slice does not include the newline character.
-    pub fn readLineFromStdout(self: *InteractiveProcess) ![]const u8 {
+    pub fn readLineFromStdout(self: *Self) ![]const u8 {
         const stdout_file = self.child.stdout orelse return error.MissingStdout;
         var stdout_reader = stdout_file.reader(&self.stdout_buffer);
         var stdout = &stdout_reader.interface;
@@ -202,7 +213,7 @@ pub const InteractiveProcess = struct {
     }
 
     /// Reads from the child's stderr until a newline is found.
-    pub fn readLineFromStderr(self: *InteractiveProcess) ![]const u8 {
+    pub fn readLineFromStderr(self: *Self) ![]const u8 {
         const stderr_file = self.child.stderr orelse return error.MissingStderr;
         var stderr_reader = stderr_file.reader(&self.stderr_buffer);
         var stderr = &stderr_reader.interface;
@@ -210,6 +221,28 @@ pub const InteractiveProcess = struct {
         // Handle potential CR on Windows if the child outputs CRLF
         const trimmed = std.mem.trimEnd(u8, line, "\r");
         return trimmed;
+    }
+
+    // TODO: add expectStdout
+    // TODO: add expectStderr
+
+    pub fn expectStdout(self: *Self, expected: []const u8) !void {
+        var stderr_writer = fs.File.stdout().writer(&self.stderr_buffer);
+        var stderr = &stderr_writer.interface;
+
+        const actual = self.readLineFromStdout() catch |err| {
+            try stderr.print("\n\n--- Test Expectation Failed ---\n", .{});
+            try stderr.print("Expected to read from stdout:\n{s}\n\n", .{expected});
+            try stderr.print("But the read operation failed with error: {any}\n", .{err});
+            try stderr.print("---------------------------------\n\n", .{});
+            try stderr.flush();
+            return err;
+        };
+
+        std.testing.expectEqualStrings(expected, actual) catch |err| {
+            try stderr.print("\n\n--- HELLO ---\n", .{});
+            return err;
+        };
     }
 };
 
@@ -229,10 +262,6 @@ pub fn spawn(options: SpawnOptions) !InteractiveProcess {
     child.stderr_behavior = .Pipe;
 
     try child.spawn();
-    errdefer {
-        // If anything fails after spawn, ensure we kill the process
-        _ = child.kill() catch {};
-    }
 
-    return InteractiveProcess{ .child = child };
+    return InteractiveProcess{ .child = child, .pid = child.id };
 }
